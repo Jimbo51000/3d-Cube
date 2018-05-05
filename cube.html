@@ -1,0 +1,258 @@
+<html>
+<body>
+<span><strong>3D Cube </strong></span><br>
+<span>Swipe left or right to spin the cube . While spinning hold down the mousekey to slow it down</span>
+<br><br>
+<canvas id="myCanvas" width="700" height="700"></canvas>
+<script>
+    function Point(x,y,z){
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+    //8 vertices
+    var vertices = [
+    new Point(-1,1,-1),
+    new Point(1,1,-1),
+    new Point(1,-1,-1),
+    new Point(-1,-1,-1),
+    new Point(-1,1,1),
+    new Point(1,1,1),
+    new Point(1,-1,1),
+    new Point(-1,-1,1)
+    ];
+
+    //6 faces
+    var faces  = [[0,1,2,3],
+                [0,4,7,3],
+                [4,5,6,7],
+                [1,5,6,2],
+                [0,1,5,4],
+                [2,6,7,3]];
+
+    //colors of faces
+    var colors =[
+    '#0000ff',
+    '#1919ff',
+    '#3232ff',
+    '#4c4cff',
+    '#6666ff',
+    '#00007f'
+    ];
+
+    //canvas dimensions
+    var height = 700;
+    var width = 700;
+
+    // cube parameters
+    var edgeLength = 50;
+    var Rx=Math.PI/4;//angle made with the x axis
+    var Ry=Math.PI/4;//angle made with the y axis
+    var Rz=Math.PI/4;//angle made with the z axis
+    var dx=0;
+    var dy=0;
+    var dz=0;
+
+
+    //initialize the canvas
+    var canvas = document.getElementById("myCanvas");
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "rgb(192,192,192)";
+    ctx.fillRect(0,0,700,400);
+
+
+    //draw the cube on first page load
+    drawCube();
+
+    var prevEvent, currentEvent;
+    var step=Math.PI/4320;//unit of rotation
+    var rate = 0.98; // total rotation rate
+    var Y = 0.005;//incremental friction rate on click
+    var df=0;//total friction accumulated
+    var isMouseDown = false;
+
+    requestAnimationFrame(mouseEventWatcher);
+
+    function mouseEventWatcher(){
+        requestAnimationFrame(mouseEventWatcher);
+        if(isMouseDown){
+            df+=Y;
+            //console.log('is held down'+df);
+        }
+    }
+
+    //This is the main time loop which updates and redraws the cube
+    //set at 60 fps frame rate
+    setInterval(function(){
+    //console.log('ticking');
+        //Once there are two points to lock on to we can compute the mouse speed
+        if(prevEvent && currentEvent){
+            var movementX=Math.abs(currentEvent.screenX-prevEvent.screenX);
+            var movementY=Math.abs(currentEvent.screenY-prevEvent.screenY);
+            var movement=Math.sqrt(movementX*movementX+movementY*movementY);
+            var speed=10*movement;
+            //console.log('speed'+speed);
+            var direction=null ;
+            var spins = speed * step; // total spins needed
+
+            //logic to see which direction the cube should spin
+            if(movementX>movementY){
+                //its either left or right
+                if(currentEvent.screenX>prevEvent.screenX){
+                    direction="right";
+                    dy = -spins;
+                }
+                else{
+                    direction ="left";
+                    dy=spins;
+                }
+            }
+            else{
+                if(currentEvent.screenY > prevEvent.screenY){
+                    direction = "down"; 
+                    dx=spins;            
+                }
+                else{
+                    direction="up";
+                    dx = -spins;
+                }
+            }
+            
+           //update the cube 
+            updateCube();
+            //console.log('redrawing');
+             //redrawing the cube , this should not be stopped 
+            drawCube();
+        }
+        prevEvent=currentEvent;
+    },16);//60 fps is 1 frame per 16 ms
+
+
+    canvas.addEventListener("mousedown", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        isMouseDown = true;
+        //console.log('mousedown');
+        canvas.onmousemove = function(e) {
+            //console.log('moving');
+            currentEvent = e;
+        }
+    });
+
+    window.addEventListener("mouseup", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        isMouseDown = false;
+        canvas.onmousemove = null;
+        df=0;
+        //console.log('mouse up' + df);
+        //currentEvent = null;//should you do this ?
+    });
+
+
+
+    function updateCube(){
+        //dampen the rate of rotation by the incremental friction df
+        r = rate - df;
+        //this is so that holding the cube too long wont stop if from moving at all
+        if(r<0.1){
+            r=0.1;
+        }
+       //apply the new rates
+        dx=r*dx;
+        Rx=Rx+dx;
+        dy=r*dy;
+        Ry=Ry+dy;
+        dz=r*dz;
+        //Rz=Rz+dz;
+
+        
+        
+    }
+
+
+    function rotate(p){
+        //rotate about z axis ie;Rz angle ,using the rotation matrix
+        //Similarily continue for below
+        var xAbz = p.x*Math.cos(Rz)+p.y*Math.sin(Rz);
+        var yAbz = -p.x*Math.sin(Rz)+p.y*Math.cos(Rz);
+        //rotate about x axis
+        var yAbzAbx = yAbz*Math.cos(Rx) + p.z*Math.sin(Rx);
+        var zAbx = -yAbz*Math.sin(Rx) + p.z * Math.cos(Rx);
+        //rotate about y axis
+        var xAbzAby = xAbz*Math.cos(Ry) + zAbx*Math.sin(Ry);
+        var zAbxAby = -xAbz*Math.sin(Ry) +zAbx*Math.sin(Ry);
+        return [xAbzAby , yAbzAbx,zAbxAby];
+    }
+
+    function project(p){
+        //projecting with the edge length
+        var x = p[0]*edgeLength+width/2;
+        var y = p[1]*edgeLength+height/2;
+        var z = p[2];
+        return [x,y,z];
+    }
+
+    function drawLine(p1,p2) {
+        ctx.beginPath();
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.lineTo(p2[0], p2[1]);
+        ctx.strokeStyle = "rgb(255,0,0)";
+        ctx.stroke();
+    }
+    function drawCube(){
+        ctx.clearRect(0,0,700,400);
+        ctx.fillStyle = "rgb(192,192,192)";
+        ctx.fillRect(0,0,width,height);
+        var projectedVertices = [];
+        //project 3d points to 2d
+        for(var i=0;i<vertices.length;i++){
+            var vertex = vertices[i];
+            var prjVertex = project(rotate(vertex));
+            projectedVertices.push(prjVertex);
+
+            //draw the vertex number 
+            // ctx.fillStyle = "red";
+            // ctx.fillText(i,prjVertex[0]+5,prjVertex[1]-5);
+        }
+        
+
+        //before drawing the faces we need to sort by the z axis distance since the faces which are at the front needs to 
+        //be drawn last . Other wise this face will be redrawn upon by the faces behind it .
+        
+        var dist = new Array();
+
+        for( var i = 0; i < faces.length; i++ ) {
+            var f = faces[i];
+            dist[i] = {"id":i, "d":(projectedVertices[f[0]][2] + projectedVertices[f[1]][2] + projectedVertices[f[2]][2] + projectedVertices[f[3]][2]) / 4.0};
+        }
+
+        dist.sort(function(p1,p2) {
+            return p2.d - p1.d;
+        });
+
+        //draw the faces
+        for(var i=0;i<faces.length;i++){
+            //drawing each face one by one by drawing 4 lines connecting the vertices of a face and filling it with a color
+            var fi = dist[i].id;
+            var face = faces[fi];
+            ctx.fillStyle = colors[fi];
+            ctx.beginPath();
+            ctx.moveTo(projectedVertices[face[0]][0],projectedVertices[face[0]][1]);
+            for(var j=1;j<face.length;j++){
+                var v = face[j];
+                ctx.lineTo(projectedVertices[v][0],projectedVertices[v][1]);
+                
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+
+
+
+
+</script>
+<body>
+</html>
+
